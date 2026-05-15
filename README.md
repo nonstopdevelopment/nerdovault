@@ -76,6 +76,8 @@ install shell completions from the executable.
 - `--biometry-current-set` uses a stricter biometric-only LocalAuthentication
   policy and stores the evaluated biometric domain state so Nerdovault can stop
   unlocking if enrolled biometrics change.
+- `nerdovault doctor` reports the active auth policy and whether macOS says
+  device-owner auth and biometrics are available.
 - Runtime injection only sets environment variables on the child process.
   Nerdovault does not write `.env` files.
 - Deleting the Nerdovault Keychain master key makes the encrypted local vault

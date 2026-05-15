@@ -230,8 +230,14 @@ impl Vault {
     }
 
     pub fn doctor(&self) -> Result<()> {
+        let auth = Keychain::auth_availability();
+        let policy = self
+            .store
+            .get_setting(SETTING_ACCESS_POLICY)?
+            .unwrap_or_else(|| AccessPolicy::UserPresence.as_str().to_string());
+
         println!("Nerdovault doctor");
-        println!("Data directory: {}", paths::app_dir()?.display());
+        println!("Vault directory: {}", paths::app_dir()?.display());
         println!("Database: {}", self.store.path().display());
         println!("Database writable: yes");
         println!(
@@ -242,12 +248,12 @@ impl Vault {
                 "missing; run `nerdovault init`"
             }
         );
+        println!("Auth policy: {policy}");
         println!(
-            "Access policy: {}",
-            self.store
-                .get_setting(SETTING_ACCESS_POLICY)?
-                .unwrap_or_else(|| AccessPolicy::UserPresence.as_str().to_string())
+            "Device owner authentication available: {}",
+            yes_no(auth.device_owner)
         );
+        println!("Biometrics available: {}", yes_no(auth.biometrics));
         if Path::new(".nerdovault.toml").exists() {
             let manifest = crate::manifest::read_manifest(Path::new(".nerdovault.toml"))?;
             println!("Manifest project: {}", manifest.project);
@@ -329,4 +335,12 @@ fn validate_env_key(key: &str) -> Result<()> {
         bail!("env key may only contain ASCII letters, numbers, and underscores");
     }
     Ok(())
+}
+
+fn yes_no(value: bool) -> &'static str {
+    if value {
+        "yes"
+    } else {
+        "no"
+    }
 }

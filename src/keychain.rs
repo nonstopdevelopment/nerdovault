@@ -20,9 +20,15 @@ impl AccessPolicy {
     }
 }
 
+#[derive(Debug, Clone)]
+pub struct AuthAvailability {
+    pub device_owner: bool,
+    pub biometrics: bool,
+}
+
 #[cfg(target_os = "macos")]
 mod macos {
-    use super::AccessPolicy;
+    use super::{AccessPolicy, AuthAvailability};
     use crate::crypto;
     use anyhow::{anyhow, bail, Context, Result};
     use base64::prelude::*;
@@ -123,6 +129,10 @@ mod macos {
     impl Keychain {
         pub fn authenticate(policy: AccessPolicy, reason: &str) -> Result<Option<String>> {
             authenticate(policy, reason)
+        }
+
+        pub fn auth_availability() -> AuthAvailability {
+            auth_availability()
         }
 
         pub fn load_or_create_master_key(_policy: AccessPolicy) -> Result<Vec<u8>> {
@@ -306,6 +316,36 @@ mod macos {
         }
     }
 
+    fn auth_availability() -> AuthAvailability {
+        unsafe {
+            let context: *mut Object = msg_send![class!(LAContext), new];
+            if context.is_null() {
+                return AuthAvailability {
+                    device_owner: false,
+                    biometrics: false,
+                };
+            }
+            let context = OwnedObjc(context);
+            let mut error: *mut Object = ptr::null_mut();
+            let device_owner: BOOL = msg_send![
+                context.0,
+                canEvaluatePolicy:LA_POLICY_DEVICE_OWNER_AUTHENTICATION
+                error:&mut error
+            ];
+            let mut biometric_error: *mut Object = ptr::null_mut();
+            let biometrics: BOOL = msg_send![
+                context.0,
+                canEvaluatePolicy:LA_POLICY_DEVICE_OWNER_AUTHENTICATION_WITH_BIOMETRICS
+                error:&mut biometric_error
+            ];
+
+            AuthAvailability {
+                device_owner: device_owner == YES,
+                biometrics: biometrics == YES,
+            }
+        }
+    }
+
     unsafe fn ns_data_base64(data: *mut Object) -> Option<String> {
         if data.is_null() {
             return None;
@@ -381,6 +421,13 @@ pub struct Keychain;
 
 #[cfg(not(target_os = "macos"))]
 impl Keychain {
+    pub fn auth_availability() -> AuthAvailability {
+        AuthAvailability {
+            device_owner: false,
+            biometrics: false,
+        }
+    }
+
     pub fn authenticate(_policy: AccessPolicy, _reason: &str) -> anyhow::Result<Option<String>> {
         anyhow::bail!("Nerdovault v1 requires macOS LocalAuthentication")
     }

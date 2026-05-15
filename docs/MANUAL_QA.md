@@ -19,6 +19,7 @@ nerdovault set -p qaapp XAI_API_KEY --value test-secret
 nerdovault get -p qaapp XAI_API_KEY
 nerdovault reveal -p qaapp XAI_API_KEY
 nerdovault run -p qaapp -- env
+nerdovault doctor
 ```
 
 Expected:
@@ -29,6 +30,8 @@ Expected:
   macOS should offer Touch ID with the configured fallback.
 - `reveal` prints `XAI_API_KEY=test-secret`.
 - `run` injects `XAI_API_KEY` into the child process only.
+- `doctor` reports `Auth policy: userPresence` plus device-owner and biometric
+  availability without unlocking the vault.
 
 ## Strict Biometry Key
 
