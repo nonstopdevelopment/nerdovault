@@ -58,11 +58,17 @@ Run `nerdovault init` inside a repo to create `.nerdovault.toml`. The manifest
 is safe to commit because it contains project names, required env names, and
 alias links only. It never contains values.
 
-## Homebrew Formula
+## Homebrew
 
-The starter formula lives in `Formula/nerdovault.rb`. For a tap release, update
-the `url` and `sha256` fields, then Homebrew will build the Rust binary and
-install shell completions from the executable.
+The formula lives in `Formula/nerdovault.rb`.
+
+```sh
+brew tap nonstopdevelopment/nerdovault https://github.com/nonstopdevelopment/nerdovault
+brew install nerdovault
+```
+
+The explicit URL is needed because the project repo is named `nerdovault`, not
+`homebrew-nerdovault`. A dedicated Homebrew tap repo can make this shorter later.
 
 ## Security Notes
 
