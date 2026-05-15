@@ -24,7 +24,8 @@ Nerdovault is local-only and macOS-first.
 
 - Secret values are encrypted in the local vault database.
 - The vault master key is stored as one Nerdovault-owned macOS Keychain item.
-- Touch ID/user presence gates access to that master key.
+- Nerdovault requires LocalAuthentication before reading or creating that
+  master key.
 - Project names, env var names, alias names, and audit metadata are not treated
   as secret.
 - Deleting the Keychain master key makes existing encrypted values

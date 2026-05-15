@@ -1,5 +1,4 @@
 use anyhow::{Context, Result};
-use directories::ProjectDirs;
 use std::env;
 use std::path::PathBuf;
 
@@ -8,9 +7,8 @@ pub fn app_dir() -> Result<PathBuf> {
         return Ok(PathBuf::from(path));
     }
 
-    let dirs = ProjectDirs::from("dev", "NonstopDev", "Nerdovault")
-        .context("could not determine application support directory")?;
-    Ok(dirs.data_local_dir().to_path_buf())
+    let home = env::var_os("HOME").context("could not determine home directory")?;
+    Ok(PathBuf::from(home).join(".nerdovault"))
 }
 
 pub fn ensure_app_dir() -> Result<PathBuf> {

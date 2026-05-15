@@ -4,9 +4,9 @@ Nerdovault is a macOS-first secrets CLI for keeping project environment
 variables out of `.env` files and away from agent-readable workspaces.
 
 It stores project metadata locally, encrypts secret values with an app master
-key, and keeps that master key in the macOS Keychain behind user-presence
-protection. On Macs with Touch ID, unlock prompts can use Touch ID with
-passcode fallback.
+key, keeps that master key as one Nerdovault-owned macOS Keychain item, and
+requires LocalAuthentication before unlocking. On Macs with Touch ID, unlock
+prompts can use Touch ID with password fallback.
 
 ## Quick Start
 
@@ -67,13 +67,15 @@ install shell completions from the executable.
 ## Security Notes
 
 - Secret values are encrypted before they are written to the local database.
-- A single Nerdovault master key is stored in the macOS Keychain with
-  access-control flags. Project secrets are not stored as individual Keychain
-  passwords.
-- `userPresence` is the default so Touch ID works when available, with passcode
-  fallback.
-- `--biometry-current-set` creates a stricter master key that is invalidated
-  when enrolled biometrics change.
+- A single Nerdovault master key is stored in the macOS Keychain. Project
+  secrets are not stored as individual Keychain passwords.
+- `~/.nerdovault` is the default vault directory. Set `NERDOVAULT_HOME` to use a
+  different location.
+- `userPresence` is the default LocalAuthentication policy so Touch ID works
+  when available, with password fallback.
+- `--biometry-current-set` uses a stricter biometric-only LocalAuthentication
+  policy and stores the evaluated biometric domain state so Nerdovault can stop
+  unlocking if enrolled biometrics change.
 - Runtime injection only sets environment variables on the child process.
   Nerdovault does not write `.env` files.
 - Deleting the Nerdovault Keychain master key makes the encrypted local vault

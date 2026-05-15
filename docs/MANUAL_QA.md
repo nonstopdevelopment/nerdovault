@@ -25,9 +25,10 @@ Expected:
 
 - `init` creates a Keychain item for `dev.nonstop.nerdovault/master-key`.
 - `get` prints `XAI_API_KEY=********`.
-- `reveal` prompts for user presence and prints `XAI_API_KEY=test-secret`.
-- `run` prompts for user presence and injects `XAI_API_KEY` into the child
-  process only.
+- `set`, `reveal`, and `run` prompt for LocalAuthentication. On Touch ID Macs,
+  macOS should offer Touch ID with the configured fallback.
+- `reveal` prints `XAI_API_KEY=test-secret`.
+- `run` injects `XAI_API_KEY` into the child process only.
 
 ## Strict Biometry Key
 

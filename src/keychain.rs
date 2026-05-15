@@ -25,26 +25,30 @@ mod macos {
     use super::AccessPolicy;
     use crate::crypto;
     use anyhow::{anyhow, bail, Context, Result};
+    use base64::prelude::*;
+    use block::ConcreteBlock;
+    use objc::runtime::{Object, BOOL, YES};
+    use objc::{class, msg_send, sel, sel_impl};
     use std::ffi::CString;
-    use std::os::raw::{c_char, c_long, c_ulong, c_void};
+    use std::os::raw::{c_char, c_long, c_void};
     use std::ptr;
+    use std::sync::mpsc;
 
     type CFIndex = c_long;
-    type CFOptionFlags = c_ulong;
     type OSStatus = i32;
     type CFTypeRef = *const c_void;
     type CFStringRef = *const c_void;
     type CFDataRef = *const c_void;
     type CFDictionaryRef = *const c_void;
     type CFMutableDictionaryRef = *mut c_void;
-    type SecAccessControlRef = *const c_void;
 
     const K_CF_STRING_ENCODING_UTF8: u32 = 0x0800_0100;
     const ERR_SEC_SUCCESS: OSStatus = 0;
     const ERR_SEC_DUPLICATE_ITEM: OSStatus = -25299;
     const ERR_SEC_ITEM_NOT_FOUND: OSStatus = -25300;
-    const K_SEC_ACCESS_CONTROL_USER_PRESENCE: CFOptionFlags = 1 << 0;
-    const K_SEC_ACCESS_CONTROL_BIOMETRY_CURRENT_SET: CFOptionFlags = 1 << 3;
+    const NS_UTF8_STRING_ENCODING: usize = 4;
+    const LA_POLICY_DEVICE_OWNER_AUTHENTICATION_WITH_BIOMETRICS: isize = 1;
+    const LA_POLICY_DEVICE_OWNER_AUTHENTICATION: isize = 2;
 
     const SERVICE: &str = "dev.nonstop.nerdovault";
     const ACCOUNT: &str = "master-key";
@@ -102,43 +106,42 @@ mod macos {
         static kSecReturnData: CFStringRef;
         static kSecMatchLimit: CFStringRef;
         static kSecMatchLimitOne: CFStringRef;
-        static kSecAttrAccessControl: CFStringRef;
-        static kSecAttrAccessibleWhenUnlockedThisDeviceOnly: CFStringRef;
-        static kSecUseOperationPrompt: CFStringRef;
 
-        fn SecAccessControlCreateWithFlags(
-            allocator: CFTypeRef,
-            protection: CFTypeRef,
-            flags: CFOptionFlags,
-            error: *mut CFTypeRef,
-        ) -> SecAccessControlRef;
         fn SecItemAdd(attributes: CFDictionaryRef, result: *mut CFTypeRef) -> OSStatus;
         fn SecItemCopyMatching(query: CFDictionaryRef, result: *mut CFTypeRef) -> OSStatus;
         fn SecItemDelete(query: CFDictionaryRef) -> OSStatus;
     }
 
+    #[link(name = "Foundation", kind = "framework")]
+    extern "C" {}
+
+    #[link(name = "LocalAuthentication", kind = "framework")]
+    extern "C" {}
+
     pub struct Keychain;
 
     impl Keychain {
-        pub fn load_or_create_master_key(policy: AccessPolicy) -> Result<Vec<u8>> {
-            match Self::read_master_key("Unlock Nerdovault") {
+        pub fn authenticate(policy: AccessPolicy, reason: &str) -> Result<Option<String>> {
+            authenticate(policy, reason)
+        }
+
+        pub fn load_or_create_master_key(_policy: AccessPolicy) -> Result<Vec<u8>> {
+            match Self::read_master_key() {
                 Ok(key) => Ok(key),
                 Err(error) if is_item_not_found(&error) => {
                     let key = crypto::generate_master_key();
-                    Self::store_master_key(&key, policy)?;
+                    Self::store_master_key(&key)?;
                     Ok(key.to_vec())
                 }
                 Err(error) => Err(error),
             }
         }
 
-        pub fn read_master_key(prompt: &str) -> Result<Vec<u8>> {
+        pub fn read_master_key() -> Result<Vec<u8>> {
             unsafe {
                 let dict = base_query()?;
-                let prompt = cf_string(prompt)?;
                 CFDictionarySetValue(dict.0, kSecReturnData, kCFBooleanTrue);
                 CFDictionarySetValue(dict.0, kSecMatchLimit, kSecMatchLimitOne);
-                CFDictionarySetValue(dict.0, kSecUseOperationPrompt, prompt.0);
 
                 let mut result: CFTypeRef = ptr::null();
                 let status = SecItemCopyMatching(dict.0 as CFDictionaryRef, &mut result);
@@ -176,16 +179,11 @@ mod macos {
             }
         }
 
-        fn store_master_key(
-            key: &[u8; crypto::MASTER_KEY_LEN],
-            policy: AccessPolicy,
-        ) -> Result<()> {
+        fn store_master_key(key: &[u8; crypto::MASTER_KEY_LEN]) -> Result<()> {
             unsafe {
                 let dict = base_query()?;
                 let data = cf_data(key)?;
-                let access = access_control(policy)?;
                 CFDictionarySetValue(dict.0, kSecValueData, data.0);
-                CFDictionarySetValue(dict.0, kSecAttrAccessControl, access.0);
 
                 let status = SecItemAdd(dict.0 as CFDictionaryRef, ptr::null_mut());
                 match status {
@@ -223,27 +221,6 @@ mod macos {
         Ok(dict)
     }
 
-    unsafe fn access_control(policy: AccessPolicy) -> Result<OwnedCf> {
-        let flags = match policy {
-            AccessPolicy::UserPresence => K_SEC_ACCESS_CONTROL_USER_PRESENCE,
-            AccessPolicy::BiometryCurrentSet => K_SEC_ACCESS_CONTROL_BIOMETRY_CURRENT_SET,
-        };
-        let mut error: CFTypeRef = ptr::null();
-        let access = SecAccessControlCreateWithFlags(
-            ptr::null(),
-            kSecAttrAccessibleWhenUnlockedThisDeviceOnly,
-            flags,
-            &mut error,
-        );
-        if !error.is_null() {
-            CFRelease(error);
-        }
-        if access.is_null() {
-            bail!("failed to create Keychain access control");
-        }
-        Ok(OwnedCf(access))
-    }
-
     unsafe fn cf_string(value: &str) -> Result<OwnedCf> {
         let c_value = CString::new(value).context("string contains null byte")?;
         let cf =
@@ -262,6 +239,86 @@ mod macos {
         Ok(OwnedCf(cf))
     }
 
+    unsafe fn ns_string(value: &str) -> Result<OwnedObjc> {
+        let string: *mut Object = msg_send![class!(NSString), alloc];
+        let string: *mut Object = msg_send![
+            string,
+            initWithBytes:value.as_ptr()
+            length:value.len()
+            encoding:NS_UTF8_STRING_ENCODING
+        ];
+        if string.is_null() {
+            bail!("failed to create NSString");
+        }
+        Ok(OwnedObjc(string))
+    }
+
+    fn authenticate(policy: AccessPolicy, reason: &str) -> Result<Option<String>> {
+        unsafe {
+            let context: *mut Object = msg_send![class!(LAContext), new];
+            if context.is_null() {
+                bail!("failed to create LocalAuthentication context");
+            }
+            let context = OwnedObjc(context);
+            let reason = ns_string(reason)?;
+            let policy_code = match policy {
+                AccessPolicy::UserPresence => LA_POLICY_DEVICE_OWNER_AUTHENTICATION,
+                AccessPolicy::BiometryCurrentSet => {
+                    LA_POLICY_DEVICE_OWNER_AUTHENTICATION_WITH_BIOMETRICS
+                }
+            };
+
+            let mut error: *mut Object = ptr::null_mut();
+            let can_evaluate: BOOL =
+                msg_send![context.0, canEvaluatePolicy:policy_code error:&mut error];
+            if can_evaluate != YES {
+                bail!(
+                    "LocalAuthentication cannot evaluate {}; make sure Touch ID or device owner authentication is enabled",
+                    policy.as_str()
+                );
+            }
+
+            let (tx, rx) = mpsc::channel();
+            let reply = ConcreteBlock::new(move |success: BOOL, error: *mut Object| {
+                let _ = tx.send((success == YES, !error.is_null()));
+            })
+            .copy();
+
+            let _: () = msg_send![
+                context.0,
+                evaluatePolicy:policy_code
+                localizedReason:reason.0
+                reply:&*reply
+            ];
+
+            let (success, had_error) = rx
+                .recv()
+                .context("failed to receive LocalAuthentication result")?;
+            if !success {
+                if had_error {
+                    bail!("LocalAuthentication was not approved");
+                }
+                bail!("LocalAuthentication failed");
+            }
+
+            let state: *mut Object = msg_send![context.0, evaluatedPolicyDomainState];
+            Ok(ns_data_base64(state))
+        }
+    }
+
+    unsafe fn ns_data_base64(data: *mut Object) -> Option<String> {
+        if data.is_null() {
+            return None;
+        }
+        let len: usize = msg_send![data, length];
+        let bytes: *const u8 = msg_send![data, bytes];
+        if bytes.is_null() || len == 0 {
+            return None;
+        }
+        let bytes = std::slice::from_raw_parts(bytes, len);
+        Some(BASE64_STANDARD.encode(bytes))
+    }
+
     fn keychain_error<T>(operation: &str, status: OSStatus) -> Result<T> {
         Err(anyhow!(
             "Keychain {operation} failed with OSStatus {status}"
@@ -274,6 +331,18 @@ mod macos {
         fn drop(&mut self) {
             if !self.0.is_null() {
                 unsafe { CFRelease(self.0) };
+            }
+        }
+    }
+
+    struct OwnedObjc(*mut Object);
+
+    impl Drop for OwnedObjc {
+        fn drop(&mut self) {
+            if !self.0.is_null() {
+                unsafe {
+                    let _: () = msg_send![self.0, release];
+                }
             }
         }
     }
@@ -312,11 +381,15 @@ pub struct Keychain;
 
 #[cfg(not(target_os = "macos"))]
 impl Keychain {
+    pub fn authenticate(_policy: AccessPolicy, _reason: &str) -> anyhow::Result<Option<String>> {
+        anyhow::bail!("Nerdovault v1 requires macOS LocalAuthentication")
+    }
+
     pub fn load_or_create_master_key(_policy: AccessPolicy) -> anyhow::Result<Vec<u8>> {
         anyhow::bail!("Nerdovault v1 requires macOS Keychain")
     }
 
-    pub fn read_master_key(_prompt: &str) -> anyhow::Result<Vec<u8>> {
+    pub fn read_master_key() -> anyhow::Result<Vec<u8>> {
         anyhow::bail!("Nerdovault v1 requires macOS Keychain")
     }
 

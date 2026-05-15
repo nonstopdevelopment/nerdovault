@@ -11,6 +11,7 @@ use std::path::Path;
 use zeroize::Zeroize;
 
 const SETTING_ACCESS_POLICY: &str = "keychain_access_policy";
+const SETTING_BIOMETRY_DOMAIN_STATE: &str = "biometry_domain_state";
 
 pub struct Vault {
     store: Store,
@@ -30,10 +31,15 @@ impl Vault {
         } else {
             AccessPolicy::UserPresence
         };
+        let domain_state = Keychain::authenticate(policy, "Initialize Nerdovault")?;
         let mut key = Keychain::load_or_create_master_key(policy)?;
         key.zeroize();
         self.store
             .set_setting(SETTING_ACCESS_POLICY, policy.as_str())?;
+        if let Some(domain_state) = domain_state {
+            self.store
+                .set_setting(SETTING_BIOMETRY_DOMAIN_STATE, &domain_state)?;
+        }
         self.store.record_audit(
             "init",
             None,
@@ -253,15 +259,23 @@ impl Vault {
     }
 
     fn master_key(&self, prompt: &str) -> Result<Vec<u8>> {
+        let policy = self
+            .store
+            .get_setting(SETTING_ACCESS_POLICY)?
+            .map(|value| AccessPolicy::from_str(&value))
+            .unwrap_or(AccessPolicy::UserPresence);
+        let domain_state = Keychain::authenticate(policy, prompt)?;
+        if policy == AccessPolicy::BiometryCurrentSet {
+            let expected = self.store.get_setting(SETTING_BIOMETRY_DOMAIN_STATE)?;
+            if expected.is_some() && expected != domain_state {
+                bail!("biometry set changed since Nerdovault was initialized");
+            }
+        }
+
         if !Keychain::master_key_exists()? {
-            let policy = self
-                .store
-                .get_setting(SETTING_ACCESS_POLICY)?
-                .map(|value| AccessPolicy::from_str(&value))
-                .unwrap_or(AccessPolicy::UserPresence);
             return Keychain::load_or_create_master_key(policy);
         }
-        Keychain::read_master_key(prompt)
+        Keychain::read_master_key()
     }
 
     fn decrypt_stored_secret(
