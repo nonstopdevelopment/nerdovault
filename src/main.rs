@@ -1,3 +1,7 @@
+// The macOS Objective-C bridge currently uses the `objc` crate, whose macros
+// emit an internal `cfg(cargo-clippy)` that Rust 1.95 reports as unexpected.
+#![allow(unexpected_cfgs)]
+
 mod audit;
 mod cli;
 mod complete;
