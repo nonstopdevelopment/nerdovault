@@ -17,6 +17,7 @@ pub fn redact() -> &'static str {
     "********"
 }
 
+#[cfg(any(target_os = "macos", test))]
 pub fn generate_master_key() -> [u8; MASTER_KEY_LEN] {
     let mut key = [0u8; MASTER_KEY_LEN];
     OsRng.fill_bytes(&mut key);
