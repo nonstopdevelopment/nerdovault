@@ -1,0 +1,36 @@
+[package]
+name = "nerdovault"
+version = "0.1.0"
+edition = "2021"
+rust-version = "1.83"
+description = "A local, Touch ID protected secrets CLI for project-scoped environment variables."
+license = "MIT"
+homepage = "https://github.com/nonstopdevelopment/nerdovault"
+repository = "https://github.com/nonstopdevelopment/nerdovault"
+readme = "README.md"
+
+[[bin]]
+name = "nerdovault"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1.0"
+base64 = "0.22"
+chacha20poly1305 = { version = "0.10", features = ["std"] }
+chrono = { version = "0.4", default-features = false, features = ["clock", "std"] }
+clap = { version = "=4.5.32", features = ["derive"] }
+clap_complete = "=4.5.46"
+directories = "5.0"
+dotenvy = "0.15"
+regex = "1.10"
+rpassword = "=7.3.1"
+rusqlite = { version = "0.32", features = ["bundled"] }
+serde = { version = "1.0", features = ["derive"] }
+thiserror = "1.0"
+toml = "=0.8.23"
+walkdir = "2.5"
+zeroize = "1.8"
+indexmap = "=2.6.0"
+
+[dev-dependencies]
+tempfile = "=3.14.0"

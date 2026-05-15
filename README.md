@@ -1,0 +1,86 @@
+# Nerdovault
+
+Nerdovault is a macOS-first secrets CLI for keeping project environment
+variables out of `.env` files and away from agent-readable workspaces.
+
+It stores project metadata locally, encrypts secret values with an app master
+key, and keeps that master key in the macOS Keychain behind user-presence
+protection. On Macs with Touch ID, unlock prompts can use Touch ID with
+passcode fallback.
+
+## Quick Start
+
+```sh
+nerdovault init
+nerdovault project create myapp
+nerdovault set -p myapp XAI_API_KEY
+nerdovault run -p myapp -- node index.js
+```
+
+The shorter run form is also supported:
+
+```sh
+nerdovault -p myapp -- node index.js
+```
+
+## Commands
+
+```sh
+nerdovault init [--biometry-current-set]
+nerdovault project create myapp
+nerdovault project list
+nerdovault project delete myapp
+nerdovault set -p myapp XAI_API_KEY
+nerdovault list -p myapp
+nerdovault get -p myapp XAI_API_KEY
+nerdovault reveal -p myapp XAI_API_KEY
+nerdovault delete -p myapp XAI_API_KEY
+nerdovault import -p myapp .env
+nerdovault project myapp add .env
+nerdovault alias create xai/api-key
+nerdovault alias set xai/api-key
+nerdovault link -p myapp XAI_API_KEY --alias xai/api-key
+nerdovault scan
+nerdovault guard install
+nerdovault doctor
+nerdovault completions zsh
+```
+
+`get` is intentionally redacted. Use `reveal` when you truly need the raw
+value; Nerdovault records that event in the local audit log.
+
+The hidden `nerdovault complete projects|keys|aliases` command exposes
+metadata-only dynamic values for future richer shell completion adapters.
+
+## Safe Manifests
+
+Run `nerdovault init` inside a repo to create `.nerdovault.toml`. The manifest
+is safe to commit because it contains project names, required env names, and
+alias links only. It never contains values.
+
+## Homebrew Formula
+
+The starter formula lives in `Formula/nerdovault.rb`. For a tap release, update
+the `url` and `sha256` fields, then Homebrew will build the Rust binary and
+install shell completions from the executable.
+
+## Security Notes
+
+- Secret values are encrypted before they are written to the local database.
+- A single Nerdovault master key is stored in the macOS Keychain with
+  access-control flags. Project secrets are not stored as individual Keychain
+  passwords.
+- `userPresence` is the default so Touch ID works when available, with passcode
+  fallback.
+- `--biometry-current-set` creates a stricter master key that is invalidated
+  when enrolled biometrics change.
+- Runtime injection only sets environment variables on the child process.
+  Nerdovault does not write `.env` files.
+- Deleting the Nerdovault Keychain master key makes the encrypted local vault
+  unrecoverable unless a future backup/recovery feature has been used.
+
+More detail:
+
+- [Storage model](docs/STORAGE_MODEL.md)
+- [Threat model](docs/THREAT_MODEL.md)
+- [Manual QA](docs/MANUAL_QA.md)
