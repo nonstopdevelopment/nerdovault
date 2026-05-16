@@ -1,5 +1,22 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Daily-use guide for migration, aliases, guard hooks, and health checks.
+- `doctor` checks for vault directory/database permissions, empty project
+  secrets, linked alias issues, missing manifest keys, and manifest alias drift.
+
+### Changed
+
+- Nerdovault now enforces `0700` permissions on the vault directory and `0600`
+  permissions on the SQLite database on Unix/macOS.
+- `--value` prints a warning because command-line secret values can be captured
+  in shell history or process lists.
+- Alias deletion now refuses to delete aliases that are still linked to project
+  keys.
+
 ## v0.1.0 - 2026-05-15
 
 Initial public release of Nerdovault, a macOS-first local secrets CLI for

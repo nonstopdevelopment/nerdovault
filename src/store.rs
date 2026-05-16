@@ -1,6 +1,7 @@
 use crate::audit::AuditEvent;
 use crate::crypto::EncryptedValue;
-use anyhow::{Context, Result};
+use crate::paths;
+use anyhow::{bail, Context, Result};
 use chrono::Utc;
 use rusqlite::{params, Connection, OptionalExtension};
 use std::path::{Path, PathBuf};
@@ -23,6 +24,21 @@ pub struct StoredAlias {
     pub encrypted: Option<EncryptedValue>,
 }
 
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct AliasLink {
+    pub project: String,
+    pub key: String,
+    pub alias: String,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq)]
+pub struct ProjectSecretState {
+    pub project: String,
+    pub key: String,
+    pub has_encrypted_value: bool,
+    pub alias_name: Option<String>,
+}
+
 pub struct Store {
     conn: Connection,
     path: PathBuf,
@@ -35,6 +51,7 @@ impl Store {
         conn.pragma_update(None, "foreign_keys", "ON")?;
         let store = Self { conn, path };
         store.migrate()?;
+        paths::secure_file_permissions(&store.path)?;
         Ok(store)
     }
 
@@ -293,6 +310,20 @@ impl Store {
     }
 
     pub fn delete_alias(&self, name: &str) -> Result<()> {
+        let links = self.alias_links(name)?;
+        if !links.is_empty() {
+            let preview = links
+                .iter()
+                .take(5)
+                .map(|link| format!("{}.{}", link.project, link.key))
+                .collect::<Vec<_>>()
+                .join(", ");
+            let suffix = if links.len() > 5 { ", ..." } else { "" };
+            bail!(
+                "alias {name} is linked to {} project key(s): {preview}{suffix}; unlink or replace those keys before deleting it",
+                links.len()
+            );
+        }
         self.conn
             .execute("DELETE FROM aliases WHERE name=?1", params![name])?;
         Ok(())
@@ -314,6 +345,58 @@ impl Store {
             params![project, key, alias, now],
         )?;
         Ok(())
+    }
+
+    pub fn alias_links(&self, alias: &str) -> Result<Vec<AliasLink>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT project, key_name, alias_name FROM project_secrets
+             WHERE alias_name=?1 ORDER BY project COLLATE NOCASE, key_name COLLATE NOCASE",
+        )?;
+        let rows = stmt.query_map(params![alias], |row| {
+            Ok(AliasLink {
+                project: row.get(0)?,
+                key: row.get(1)?,
+                alias: row.get(2)?,
+            })
+        })?;
+        rows.collect::<rusqlite::Result<Vec<AliasLink>>>()
+            .map_err(Into::into)
+    }
+
+    pub fn all_alias_links(&self) -> Result<Vec<AliasLink>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT project, key_name, alias_name FROM project_secrets
+             WHERE alias_name IS NOT NULL
+             ORDER BY project COLLATE NOCASE, key_name COLLATE NOCASE",
+        )?;
+        let rows = stmt.query_map([], |row| {
+            Ok(AliasLink {
+                project: row.get(0)?,
+                key: row.get(1)?,
+                alias: row.get(2)?,
+            })
+        })?;
+        rows.collect::<rusqlite::Result<Vec<AliasLink>>>()
+            .map_err(Into::into)
+    }
+
+    pub fn all_project_secret_states(&self) -> Result<Vec<ProjectSecretState>> {
+        let mut stmt = self.conn.prepare(
+            "SELECT project, key_name, nonce, ciphertext, alias_name FROM project_secrets
+             ORDER BY project COLLATE NOCASE, key_name COLLATE NOCASE",
+        )?;
+        let rows = stmt.query_map([], |row| {
+            let nonce: Option<String> = row.get(2)?;
+            let ciphertext: Option<String> = row.get(3)?;
+            Ok(ProjectSecretState {
+                project: row.get(0)?,
+                key: row.get(1)?,
+                has_encrypted_value: nonce.is_some() && ciphertext.is_some(),
+                alias_name: row.get(4)?,
+            })
+        })?;
+        rows.collect::<rusqlite::Result<Vec<ProjectSecretState>>>()
+            .map_err(Into::into)
     }
 
     pub fn record_audit(
@@ -377,5 +460,31 @@ mod tests {
         assert_eq!(secrets.len(), 1);
         assert_eq!(secrets[0].alias_name.as_deref(), Some("xai/api-key"));
         assert_eq!(store.list_projects().unwrap(), vec!["app".to_string()]);
+    }
+
+    #[test]
+    fn refuses_to_delete_linked_aliases() {
+        let db = tempfile::NamedTempFile::new().unwrap();
+        let store = Store::open(db.path().to_path_buf()).unwrap();
+        let encrypted = EncryptedValue {
+            nonce_b64: "nonce".to_string(),
+            ciphertext_b64: "cipher".to_string(),
+        };
+
+        store.set_alias_secret("xai/api-key", &encrypted).unwrap();
+        store
+            .link_alias("app", "XAI_API_KEY", "xai/api-key")
+            .unwrap();
+
+        let error = store.delete_alias("xai/api-key").unwrap_err();
+        assert!(error.to_string().contains("is linked"));
+        assert_eq!(
+            store.alias_links("xai/api-key").unwrap(),
+            vec![AliasLink {
+                project: "app".to_string(),
+                key: "XAI_API_KEY".to_string(),
+                alias: "xai/api-key".to_string(),
+            }]
+        );
     }
 }

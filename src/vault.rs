@@ -235,10 +235,19 @@ impl Vault {
             .store
             .get_setting(SETTING_ACCESS_POLICY)?
             .unwrap_or_else(|| AccessPolicy::UserPresence.as_str().to_string());
+        let app_dir = paths::app_dir()?;
 
         println!("Nerdovault doctor");
-        println!("Vault directory: {}", paths::app_dir()?.display());
+        println!("Vault directory: {}", app_dir.display());
+        println!(
+            "Vault directory permissions: {}",
+            permission_status(&app_dir, paths::SECURE_DIR_MODE)?
+        );
         println!("Database: {}", self.store.path().display());
+        println!(
+            "Database permissions: {}",
+            permission_status(self.store.path(), paths::SECURE_FILE_MODE)?
+        );
         println!("Database writable: yes");
         println!(
             "Keychain master key: {}",
@@ -254,10 +263,13 @@ impl Vault {
             yes_no(auth.device_owner)
         );
         println!("Biometrics available: {}", yes_no(auth.biometrics));
+        self.print_project_secret_diagnostics()?;
+        self.print_linked_alias_diagnostics()?;
         if Path::new(".nerdovault.toml").exists() {
             let manifest = crate::manifest::read_manifest(Path::new(".nerdovault.toml"))?;
             println!("Manifest project: {}", manifest.project);
             println!("Manifest required keys: {}", manifest.required.len());
+            self.print_manifest_diagnostics(&manifest)?;
         } else {
             println!("Manifest: not found in current directory");
         }
@@ -311,6 +323,82 @@ impl Vault {
             &crypto::project_secret_aad(project, &secret.key),
         )
     }
+
+    fn print_project_secret_diagnostics(&self) -> Result<()> {
+        let mut issues = Vec::new();
+        for secret in self.store.all_project_secret_states()? {
+            if !secret.has_encrypted_value && secret.alias_name.is_none() {
+                issues.push(format!(
+                    "{}.{} has no stored value or alias link",
+                    secret.project, secret.key
+                ));
+            }
+        }
+        print_issue_summary("Project secret issues", &issues);
+        Ok(())
+    }
+
+    fn print_linked_alias_diagnostics(&self) -> Result<()> {
+        let mut issues = Vec::new();
+        for link in self.store.all_alias_links()? {
+            match self.store.get_alias(&link.alias)? {
+                Some(alias) if alias.encrypted.is_some() => {}
+                Some(_) => issues.push(format!(
+                    "{}.{} links to alias:{} but the alias has no value",
+                    link.project, link.key, link.alias
+                )),
+                None => issues.push(format!(
+                    "{}.{} links to missing alias:{}",
+                    link.project, link.key, link.alias
+                )),
+            }
+        }
+        print_issue_summary("Linked alias issues", &issues);
+        Ok(())
+    }
+
+    fn print_manifest_diagnostics(&self, manifest: &manifest::Manifest) -> Result<()> {
+        let mut missing_keys = Vec::new();
+        for key in &manifest.required {
+            if self
+                .store
+                .get_project_secret(&manifest.project, key)?
+                .is_none()
+            {
+                missing_keys.push(format!("{}.{}", manifest.project, key));
+            }
+        }
+        print_issue_summary("Manifest missing keys", &missing_keys);
+
+        let mut alias_issues = Vec::new();
+        for (key, alias_name) in &manifest.aliases {
+            match self.store.get_alias(alias_name)? {
+                Some(alias) if alias.encrypted.is_some() => {}
+                Some(_) => alias_issues.push(format!(
+                    "{}.{} references alias:{} but the alias has no value",
+                    manifest.project, key, alias_name
+                )),
+                None => alias_issues.push(format!(
+                    "{}.{} references missing alias:{}",
+                    manifest.project, key, alias_name
+                )),
+            }
+
+            match self.store.get_project_secret(&manifest.project, key)? {
+                Some(secret) if secret.alias_name.as_deref() == Some(alias_name.as_str()) => {}
+                Some(_) => alias_issues.push(format!(
+                    "{}.{} is not linked to alias:{} in the vault",
+                    manifest.project, key, alias_name
+                )),
+                None => alias_issues.push(format!(
+                    "{}.{} is not present in the vault for alias:{}",
+                    manifest.project, key, alias_name
+                )),
+            }
+        }
+        print_issue_summary("Manifest alias issues", &alias_issues);
+        Ok(())
+    }
 }
 
 fn validate_name(name: &str, kind: &str) -> Result<()> {
@@ -342,5 +430,28 @@ fn yes_no(value: bool) -> &'static str {
         "yes"
     } else {
         "no"
+    }
+}
+
+fn permission_status(path: &Path, expected: u32) -> Result<String> {
+    match paths::mode(path)? {
+        Some(actual) if actual == expected => Ok(format!("ok ({actual:04o})")),
+        Some(actual) => Ok(format!("check ({actual:04o}; expected {expected:04o})")),
+        None => Ok("not checked on this platform".to_string()),
+    }
+}
+
+fn print_issue_summary(label: &str, issues: &[String]) {
+    if issues.is_empty() {
+        println!("{label}: none");
+        return;
+    }
+
+    println!("{label}: {}", issues.len());
+    for issue in issues.iter().take(5) {
+        println!("  - {issue}");
+    }
+    if issues.len() > 5 {
+        println!("  - ...");
     }
 }

@@ -266,7 +266,12 @@ fn require_project(global: Option<&str>, local: Option<&str>) -> Result<String> 
 fn read_secret_value(input: SecretInput, prompt: &str) -> Result<String> {
     match input {
         SecretInput::Prompt => rpassword::prompt_password(prompt).context("failed to read secret"),
-        SecretInput::Value(value) => Ok(value),
+        SecretInput::Value(value) => {
+            eprintln!(
+                "warning: --value can be captured in shell history or process lists; prefer the prompt or --stdin for real secrets"
+            );
+            Ok(value)
+        }
         SecretInput::Stdin => {
             use std::io::Read;
             let mut value = String::new();

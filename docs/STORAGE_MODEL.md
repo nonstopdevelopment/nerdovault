@@ -36,6 +36,11 @@ The database lives under `~/.nerdovault`, unless `NERDOVAULT_HOME` is set:
 ~/.nerdovault/vault.sqlite3
 ```
 
+On Unix/macOS, Nerdovault enforces `0700` permissions on the vault directory and
+`0600` permissions on `vault.sqlite3` whenever the vault opens. This keeps the
+local database out of casual same-machine reads while still allowing the current
+user to operate normally.
+
 The database contains:
 
 - project names

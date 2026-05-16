@@ -23,6 +23,8 @@ The shorter run form is also supported:
 nerdovault -p myapp -- node index.js
 ```
 
+For the normal daily workflow, see [Regular use](docs/REGULAR_USE.md).
+
 ## Commands
 
 ```sh
@@ -77,6 +79,8 @@ The explicit URL is needed because the project repo is named `nerdovault`, not
   secrets are not stored as individual Keychain passwords.
 - `~/.nerdovault` is the default vault directory. Set `NERDOVAULT_HOME` to use a
   different location.
+- Nerdovault enforces `0700` permissions on the vault directory and `0600`
+  permissions on the SQLite database on Unix/macOS.
 - `userPresence` is the default LocalAuthentication policy so Touch ID works
   when available, with password fallback.
 - `--biometry-current-set` uses a stricter biometric-only LocalAuthentication
@@ -86,6 +90,11 @@ The explicit URL is needed because the project repo is named `nerdovault`, not
   device-owner auth and biometrics are available.
 - Runtime injection only sets environment variables on the child process.
   Nerdovault does not write `.env` files.
+- Avoid `--value` for real secrets in interactive shells because it can be
+  captured in shell history or process lists. Prefer the hidden prompt or
+  `--stdin`.
+- Linked aliases cannot be deleted until project keys stop using them, which
+  prevents silently breaking daily runtime injection.
 - Deleting the Nerdovault Keychain master key makes the encrypted local vault
   unrecoverable unless a future backup/recovery feature has been used.
 
