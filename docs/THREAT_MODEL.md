@@ -1,11 +1,11 @@
 # Threat Model
 
-Nerdovault is designed to reduce accidental local secret exposure, especially
+NerdoVault is designed to reduce accidental local secret exposure, especially
 from `.env` files in agent-readable workspaces.
 
 ## In Scope
 
-Nerdovault aims to protect against:
+NerdoVault aims to protect against:
 
 - AI agents scanning repo files and reading `.env` values
 - accidental commits of `.env` files
@@ -16,7 +16,7 @@ Nerdovault aims to protect against:
 
 ## Out of Scope for v1
 
-Nerdovault does not currently protect against:
+NerdoVault does not currently protect against:
 
 - malware running as the same user after the vault is unlocked
 - shell history capture of commands that include `--value`
@@ -44,7 +44,7 @@ unlocking secret values. Treat env var names as visible design metadata.
 - Default commands must print redacted values.
 - Raw values require explicit `reveal` or runtime injection.
 - Runtime injection sets environment variables only on the child process.
-- Nerdovault must not write `.env` files in normal operation.
+- NerdoVault must not write `.env` files in normal operation.
 - Interactive use should prefer the hidden prompt or `--stdin`; `--value` is
   kept for scripted migration/tests and prints a warning.
 - The scanner and guard hook should help find and block `.env` files, but they

@@ -1,6 +1,6 @@
 # Regular Use
 
-This is the daily Nerdovault workflow for moving project secrets out of `.env`
+This is the daily NerdoVault workflow for moving project secrets out of `.env`
 files without turning the vault into a new source of accidental leaks.
 
 ## One-Time Machine Setup
@@ -53,7 +53,7 @@ The shorter form is equivalent:
 nerdovault -p myapp -- npm run dev
 ```
 
-Nerdovault injects values into the child process environment only. It does not
+NerdoVault injects values into the child process environment only. It does not
 write a `.env` file.
 
 ## Setting Values Safely
@@ -91,7 +91,7 @@ Rotating the shared key is one command:
 nerdovault alias set xai/api-key
 ```
 
-Nerdovault refuses to delete an alias while project keys still link to it. This
+NerdoVault refuses to delete an alias while project keys still link to it. This
 prevents a shared key from silently disappearing out from under a daily app.
 
 ## Daily Health Check

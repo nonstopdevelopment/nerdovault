@@ -3,7 +3,7 @@
 These checks intentionally touch the macOS Keychain and may show a Touch ID or
 password prompt.
 
-Use a temporary Nerdovault home so the database is disposable:
+Use a temporary NerdoVault home so the database is disposable:
 
 ```sh
 export NERDOVAULT_HOME=/private/tmp/nerdovault-manual-qa
@@ -39,7 +39,7 @@ Expected:
 ## Strict Biometry Key
 
 Run this only on a disposable macOS test account or after deleting the existing
-Nerdovault Keychain item:
+NerdoVault Keychain item:
 
 ```sh
 nerdovault init --biometry-current-set

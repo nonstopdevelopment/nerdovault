@@ -2,7 +2,7 @@
 
 ## Supported Versions
 
-Nerdovault is pre-1.0 software. Security fixes will target the latest release
+NerdoVault is pre-1.0 software. Security fixes will target the latest release
 line only until the project has a stable release process.
 
 ## Reporting a Vulnerability
@@ -20,11 +20,11 @@ Do not open a public issue for:
 
 ## Current Security Posture
 
-Nerdovault is local-only and macOS-first.
+NerdoVault is local-only and macOS-first.
 
 - Secret values are encrypted in the local vault database.
-- The vault master key is stored as one Nerdovault-owned macOS Keychain item.
-- Nerdovault requires LocalAuthentication before reading or creating that
+- The vault master key is stored as one NerdoVault-owned macOS Keychain item.
+- NerdoVault requires LocalAuthentication before reading or creating that
   master key.
 - Project names, env var names, alias names, and audit metadata are not treated
   as secret.

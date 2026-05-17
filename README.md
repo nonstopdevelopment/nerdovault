@@ -1,12 +1,15 @@
-# Nerdovault
+# NerdoVault
 
-Nerdovault is a macOS-first secrets CLI for keeping project environment
+NerdoVault is a macOS-first secrets CLI for keeping project environment
 variables out of `.env` files and away from agent-readable workspaces.
 
 It stores project metadata locally, encrypts secret values with an app master
-key, keeps that master key as one Nerdovault-owned macOS Keychain item, and
+key, keeps that master key as one NerdoVault-owned macOS Keychain item, and
 requires LocalAuthentication before unlocking. On Macs with Touch ID, unlock
 prompts can use Touch ID with password fallback.
+
+Human-facing name: **NerdoVault**. Terminal-facing command, package, paths, and
+repo names stay lowercase `nerdovault`.
 
 ## Quick Start
 
@@ -24,6 +27,22 @@ nerdovault -p myapp -- node index.js
 ```
 
 For the normal daily workflow, see [Regular use](docs/REGULAR_USE.md).
+
+## Why
+
+AI agents are helpful, but they can also read whatever we leave in a workspace.
+NerdoVault moves secret values out of repo-local `.env` files, keeps committed
+manifests metadata-only, and injects scoped env vars only when starting the
+process that needs them.
+
+## Daily Flow
+
+```sh
+nerdovault init
+nerdovault import -p myapp .env
+nerdovault guard install
+nerdovault run -p myapp -- npm run dev
+```
 
 ## Commands
 
@@ -49,7 +68,7 @@ nerdovault completions zsh
 ```
 
 `get` is intentionally redacted. Use `reveal` when you truly need the raw
-value; Nerdovault records that event in the local audit log.
+value; NerdoVault records that event in the local audit log.
 
 The hidden `nerdovault complete projects|keys|aliases` command exposes
 metadata-only dynamic values for future richer shell completion adapters.
@@ -75,27 +94,27 @@ The explicit URL is needed because the project repo is named `nerdovault`, not
 ## Security Notes
 
 - Secret values are encrypted before they are written to the local database.
-- A single Nerdovault master key is stored in the macOS Keychain. Project
+- A single NerdoVault master key is stored in the macOS Keychain. Project
   secrets are not stored as individual Keychain passwords.
 - `~/.nerdovault` is the default vault directory. Set `NERDOVAULT_HOME` to use a
   different location.
-- Nerdovault enforces `0700` permissions on the vault directory and `0600`
+- NerdoVault enforces `0700` permissions on the vault directory and `0600`
   permissions on the SQLite database on Unix/macOS.
 - `userPresence` is the default LocalAuthentication policy so Touch ID works
   when available, with password fallback.
 - `--biometry-current-set` uses a stricter biometric-only LocalAuthentication
-  policy and stores the evaluated biometric domain state so Nerdovault can stop
+  policy and stores the evaluated biometric domain state so NerdoVault can stop
   unlocking if enrolled biometrics change.
 - `nerdovault doctor` reports the active auth policy and whether macOS says
   device-owner auth and biometrics are available.
 - Runtime injection only sets environment variables on the child process.
-  Nerdovault does not write `.env` files.
+  NerdoVault does not write `.env` files.
 - Avoid `--value` for real secrets in interactive shells because it can be
   captured in shell history or process lists. Prefer the hidden prompt or
   `--stdin`.
 - Linked aliases cannot be deleted until project keys stop using them, which
   prevents silently breaking daily runtime injection.
-- Deleting the Nerdovault Keychain master key makes the encrypted local vault
+- Deleting the NerdoVault Keychain master key makes the encrypted local vault
   unrecoverable unless a future backup/recovery feature has been used.
 
 More detail:

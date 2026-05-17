@@ -10,7 +10,7 @@
 
 ### Changed
 
-- Nerdovault now enforces `0700` permissions on the vault directory and `0600`
+- NerdoVault now enforces `0700` permissions on the vault directory and `0600`
   permissions on the SQLite database on Unix/macOS.
 - `--value` prints a warning because command-line secret values can be captured
   in shell history or process lists.
@@ -19,7 +19,7 @@
 
 ## v0.1.0 - 2026-05-15
 
-Initial public release of Nerdovault, a macOS-first local secrets CLI for
+Initial public release of NerdoVault, a macOS-first local secrets CLI for
 keeping project environment variables out of `.env` files and away from
 agent-readable workspaces.
 
@@ -31,7 +31,7 @@ agent-readable workspaces.
   shorter `nerdovault -p myapp -- command` form.
 - Encrypted local SQLite vault stored under `~/.nerdovault` by default, with
   `NERDOVAULT_HOME` override support.
-- Nerdovault-owned macOS Keychain master key gated by LocalAuthentication.
+- NerdoVault-owned macOS Keychain master key gated by LocalAuthentication.
 - Default `userPresence` unlock policy with Touch ID support when available and
   password fallback.
 - Optional `--biometry-current-set` initialization mode for stricter biometric
